@@ -39,6 +39,7 @@ chunyl_scripts
 !.devcontainer/*
 
 # Demo
+datasets
 serve_images/
 notebooks/
 logs
