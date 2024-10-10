@@ -23,6 +23,7 @@ wandb
 output
 llavavid
 
+images
 checkpoints
 project_checkpoints
 debug_checkpoints

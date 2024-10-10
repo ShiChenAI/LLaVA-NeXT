@@ -14,8 +14,6 @@ import json
 import os
 import math
 from tqdm import tqdm
-from decord import VideoReader, cpu
-from transformers.generation.streamers import TextIteratorStreamer
 
 from transformers import AutoConfig
 from threading import Thread
@@ -29,14 +27,14 @@ import numpy as np
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--image-path", type=str, help="Path to the image file.")
+    parser.add_argument("--image-path", type=str, default="checkpoints/images/cat.jpg", help="Path to the image file.")
     parser.add_argument("--image-dir", type=str, help="Directory to the image files.")
     parser.add_argument("--questions-file-path", type=str, help="Path to the questions file.")
     parser.add_argument("--answers-file-path", type=str, help="Path to the answers file.")
-    parser.add_argument("--question", type=str, help="Question to the single image.")
-    parser.add_argument("--model-path", type=str, help="Path to the model.")
-    parser.add_argument("--model-name", type=str, help="Name of the model.")
-    parser.add_argument("--conv-template", type=str, help="Conversation template.")
+    parser.add_argument("--question", type=str, default="猫の隣には何がありますか？", help="Question to the single image.")
+    parser.add_argument("--model-path", type=str, default="checkpoints/swallow_8B/mid_stage/llavanext-google_siglip-so400m-patch14-384-tokyotech-llm_Llama-3-Swallow-8B-Instruct-v0.1-mlp2x_gelu-mid_llava_pretrain_ja_chat", help="Path to the model.")
+    parser.add_argument("--model-name", type=str, default="llava_llama", help="Name of the model.")
+    parser.add_argument("--conv-template", type=str, default="swallow", help="Conversation template.")
     parser.add_argument("--device", type=str, default="cuda:0")
     parser.add_argument("--temperature", type=float, default=0.2)
     parser.add_argument("--top-p", type=float, default=1.0)
@@ -52,8 +50,10 @@ def generate_question_prompt(
     conv.append_message(conv.roles[0], DEFAULT_IMAGE_TOKEN + "\n" + question)
     conv.append_message(conv.roles[1], None)
     stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
+    question_prompt = conv.get_prompt()
+    print(question_prompt)
     
-    return conv.get_prompt(), stop_str
+    return question_prompt, stop_str
 
 def generate_response(
     model,
@@ -93,6 +93,7 @@ def generate_response(
     return outputs
 
 def run(args):
+    print(args)
     assert args.image_path or args.image_dir
 
     # Initialize the model
@@ -110,7 +111,7 @@ def run(args):
 
         # Generate answer
         response = generate_response(model, tokenizer, question_prompt, image_tensors,
-            image_sizes, args.temperature, args.top_p, args.num_beams, stop_str
+            image_sizes, args.temperature, args.top_p, args.num_beams, stop_str, args.device
         )
         print(response)
         
@@ -118,7 +119,7 @@ def run(args):
         assert args.question_file_path and args.answers_file_path
         with open(args.question_file_path) as f:
             ans_f = open(args.answers_file_path, "w")
-            for line in jsonlines.Reader(f):
+            for line in tqdm(jsonlines.Reader(f)):
                 image_path = os.path.join(args.image_dir, line["image"])
                 question = line["text"]
                 image = Image.open(image_path)
@@ -131,7 +132,7 @@ def run(args):
                 
                 # Generate answer
                 response = generate_response(model, tokenizer, question_prompt, image_tensors,
-                    image_sizes, args.temperature, args.top_p, args.num_beams, stop_str
+                    image_sizes, args.temperature, args.top_p, args.num_beams, stop_str, args.device
                 )
 
                 # Write results
