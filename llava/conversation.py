@@ -552,8 +552,8 @@ Answer the questions.""",
 )
 
 conv_llava_llama_3_swallow = Conversation(
-    system="You are a helpful language and vision assistant. " "You are able to understand the visual content that the user provides, " "and assist the user with a variety of tasks using natural language.",
-    #system="あなたは誠実で優秀な日本人のアシスタントです。 " "特に指示が無い場合は、常に日本語で回答してください。",
+    #system="You are a helpful language and vision assistant. " "You are able to understand the visual content that the user provides, " "and assist the user with a variety of tasks using natural language.",
+    system="あなたは誠実で優秀な日本人のアシスタントです。 " "特に指示が無い場合は、常に日本語で回答してください。",
     roles=("user", "assistant"),
     version="swallow",
     messages=[],

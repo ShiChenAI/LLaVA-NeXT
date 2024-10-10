@@ -27,14 +27,14 @@ import numpy as np
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--image-path", type=str, default="checkpoints/images/cat.jpg", help="Path to the image file.")
+    parser.add_argument("--image-path", type=str, help="Path to the image file.")
     parser.add_argument("--image-dir", type=str, help="Directory to the image files.")
     parser.add_argument("--questions-file-path", type=str, help="Path to the questions file.")
     parser.add_argument("--answers-file-path", type=str, help="Path to the answers file.")
-    parser.add_argument("--question", type=str, default="猫の隣には何がありますか？", help="Question to the single image.")
-    parser.add_argument("--model-path", type=str, default="checkpoints/swallow_8B/mid_stage/llavanext-google_siglip-so400m-patch14-384-tokyotech-llm_Llama-3-Swallow-8B-Instruct-v0.1-mlp2x_gelu-mid_llava_pretrain_ja_chat", help="Path to the model.")
-    parser.add_argument("--model-name", type=str, default="llava_llama", help="Name of the model.")
-    parser.add_argument("--conv-template", type=str, default="swallow", help="Conversation template.")
+    parser.add_argument("--question", type=str, help="Question to the single image.")
+    parser.add_argument("--model-path", type=str, help="Path to the model.")
+    parser.add_argument("--model-name", type=str, help="Name of the model.")
+    parser.add_argument("--conv-template", type=str, help="Conversation template.")
     parser.add_argument("--device", type=str, default="cuda:0")
     parser.add_argument("--temperature", type=float, default=0.2)
     parser.add_argument("--top-p", type=float, default=1.0)
@@ -51,7 +51,6 @@ def generate_question_prompt(
     conv.append_message(conv.roles[1], None)
     stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
     question_prompt = conv.get_prompt()
-    print(question_prompt)
     
     return question_prompt, stop_str
 
@@ -116,10 +115,11 @@ def run(args):
         print(response)
         
     if args.image_dir:
-        assert args.question_file_path and args.answers_file_path
-        with open(args.question_file_path) as f:
+        assert args.questions_file_path and args.answers_file_path
+        with open(args.questions_file_path) as f:
             ans_f = open(args.answers_file_path, "w")
-            for line in tqdm(jsonlines.Reader(f)):
+            for line in jsonlines.Reader(f):
+                question_id = line["question_id"]
                 image_path = os.path.join(args.image_dir, line["image"])
                 question = line["text"]
                 image = Image.open(image_path)
@@ -135,6 +135,9 @@ def run(args):
                     image_sizes, args.temperature, args.top_p, args.num_beams, stop_str, args.device
                 )
 
+                print(f"ID: {question_id}")
+                print(f"Question: {question}")
+                print(f"Answer: {response}")
                 # Write results
                 ans_f.write(json.dumps({
                     "question_id": line["question_id"],
@@ -143,9 +146,23 @@ def run(args):
                     "category": line["category"],
                     "image_category": line["image_category"],
                     "answer": response
-                }))
+                }, ensure_ascii=False) + "\n")
                 ans_f.flush()
             ans_f.close()
+        
+        # Print results
+        n_empty_ans = 0
+        with open(args.answers_file_path) as f:
+            for line in jsonlines.Reader(f):
+                q_id = line["question_id"]
+                q = line["question"]
+                a = line["answer"].strip()
+                if len(a) == 0:
+                    n_empty_ans += 1
+                print(f"Question ID: {q_id}")
+                print(f"Question: {q}")
+                print(f"LLaVA-ov-Swallow-8B-stage-1.5-chat: {a}")
+            print(f"Null: {n_empty_ans}")
 
 if __name__ == "__main__":
     args = parse_args()
