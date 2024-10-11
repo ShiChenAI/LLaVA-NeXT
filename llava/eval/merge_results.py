@@ -17,7 +17,7 @@ def run(args):
         os.makedirs(args.outputs_dir)
     
     case_infos = {os.path.splitext(os.path.split(result_path)[1])[0]: result_path \
-        for result_path in glob.glob(os.path.join(args.results_dir, "*.jsonl"))}
+        for result_path in sorted(glob.glob(os.path.join(args.results_dir, "*.jsonl")))}
 
     for img_id in tqdm(range(1, 22)):
         img_name = '%03d.jpg' % img_id

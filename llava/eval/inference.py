@@ -58,6 +58,7 @@ def generate_response(
     input_ids = tokenizer_image_token(
         question_prompt, tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt"
     ).unsqueeze(0).to(device)
+    stopping_criteria = KeywordsStoppingCriteria([stop_str], tokenizer, input_ids)
     with torch.inference_mode():
         output_ids = model.generate(
             input_ids,
@@ -69,6 +70,7 @@ def generate_response(
             num_beams=num_beams,
             # no_repeat_ngram_size=3,
             max_new_tokens=1024,
+            stopping_criteria=[stopping_criteria],
             use_cache=True
         )
 
