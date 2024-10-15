@@ -1,3 +1,11 @@
+# -*- coding: utf-8 -*-
+"""
+@File        :   merge_results.py
+@Author      :   Shi Chen
+@Time        :   2024/10/11
+@Description :   Merge inference results from Heron benchmark.
+"""
+
 import argparse
 import glob
 import os

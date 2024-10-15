@@ -1,17 +1,23 @@
+# -*- coding: utf-8 -*-
+"""
+@File        :   inference.py
+@Author      :   Shi Chen
+@Time        :   2024/10/10
+@Description :   Perform inference using a trained VLM.
+"""
+
 import argparse
 import copy
 import torch
-from typing import Dict, List, Optional, Tuple, Union
+from typing import List
 import jsonlines
 
 from llava.constants import IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN
 from llava.conversation import conv_templates, SeparatorStyle
 from llava.model.builder import load_pretrained_model
 from llava.mm_utils import process_images, process_anyres_image,tokenizer_image_token, get_model_name_from_path, KeywordsStoppingCriteria
-from transformers.generation.streamers import TextStreamer
 import json
 import os
-from tqdm import tqdm
 from PIL import Image
 
 def parse_args():
