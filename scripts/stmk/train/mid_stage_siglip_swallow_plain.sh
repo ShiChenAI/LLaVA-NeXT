@@ -19,11 +19,11 @@ torchrun --standalone --nproc_per_node=8 --nnodes=1 \
     --deepspeed scripts/zero3.json \
     --model_name_or_path ${CKPT_PATH} \
     --version ${PROMPT_VERSION} \
-    --data_path ./scripts/stmk/train/mid_stage_swallow.yaml \
+    --data_path ./scripts/stmk/train/mid_stage.yaml \
     --image_folder ./datasets/images \
-    --pretrain_mm_mlp_adapter="./checkpoints/projectors/llavanext-google_siglip-so400m-patch14-384-tokyotech-llm_Llama-3-Swallow-8B-Instruct-v0.1-mlp2x_gelu-pretrain_595k_jp_plain/mm_projector.bin" \
-    --mm_tunable_parts="mm_vision_tower,mm_mlp_adapter,mm_language_model" \
-    --mm_vision_tower_lr=2e-6 \
+    --pretrain_mm_mlp_adapter "./checkpoints/projectors/llavanext-google_siglip-so400m-patch14-384-tokyotech-llm_Llama-3-Swallow-8B-Instruct-v0.1-mlp2x_gelu-pretrain_595k_jp_plain/mm_projector.bin" \
+    --mm_tunable_parts "mm_vision_tower,mm_mlp_adapter,mm_language_model" \
+    --mm_vision_tower_lr 2e-6 \
     --vision_tower ${VISION_MODEL_VERSION} \
     --mm_projector_type mlp2x_gelu \
     --mm_vision_select_layer -2 \

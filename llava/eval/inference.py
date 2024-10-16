@@ -113,6 +113,8 @@ def run(args):
         
     if args.image_dir:
         assert args.questions_file_path and args.answers_file_path
+        if not os.path.exists(os.path.dirname(args.answers_file_path)):
+            os.makedirs(os.path.dirname(args.answers_file_path))
         with open(args.questions_file_path) as f:
             ans_f = open(args.answers_file_path, "w")
             for line in jsonlines.Reader(f):

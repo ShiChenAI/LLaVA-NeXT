@@ -17,6 +17,8 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--results-dir", type=str, help="Directory to the results files.")
     parser.add_argument("--outputs-dir", type=str, help="Directory to the output files.")
+    parser.add_argument("--categories", type=str, nargs='+', choices=["complex", "conv", "detail"],
+                        help="Question categories to merge.")
 
     return parser.parse_args()
 
@@ -34,18 +36,19 @@ def run(args):
                         "question": [], 
                         "category": [], 
                         "image_category": []}
+        result_infos = {"question": []}
         b_first = True
         for case_name, result_path in case_infos.items():
             result_infos[case_name] = []
             with open(result_path) as f:
                 for line in jsonlines.Reader(f):
-                    if line["image"] == img_name:
+                    if line["image"] == img_name and line["category"] in args.categories:
                         result_infos[case_name].append(line["answer"].strip())
                         if b_first:
-                            result_infos["question_id"].append(line["question_id"])
+                            #result_infos["question_id"].append(line["question_id"])
                             result_infos["question"].append(line["question"])
-                            result_infos["category"].append(line["category"])
-                            result_infos["image_category"].append(line["image_category"])
+                            #result_infos["category"].append(line["category"])
+                            #result_infos["image_category"].append(line["image_category"])
             b_first = False
 
         df = pd.DataFrame(result_infos)

@@ -1,4 +1,12 @@
-LLM_VERSION="tokyotech-llm/Llama-3-Swallow-8B-Instruct-v0.1"
+export OMP_NUM_THREADS=8
+#export NCCL_P2P_DISABLE=1
+#export NCCL_IB_DISABLE=1
+#export NCCL_IB_GID_INDEX=3
+#export NCCL_SOCKET_IFNAME=ens18
+#export NCCL_DEBUG=INFO
+export CUDA_VISIBLE_DEVICES=0,1
+
+LLM_VERSION="Qwen/Qwen2.5-0.5B"
 LLM_VERSION_CLEAN="${LLM_VERSION//\//_}"
 VISION_MODEL_VERSION="google/siglip-so400m-patch14-384"
 VISION_MODEL_VERSION_CLEAN="${VISION_MODEL_VERSION//\//_}"
@@ -10,21 +18,21 @@ echo "BASE_RUN_NAME: ${BASE_RUN_NAME}"
 ############### Finetune ################
 
 # Stage 2
-PROMPT_VERSION="swallow"
+PROMPT_VERSION="qwen_2"
 RUN_NAME="llava-onevision-${VISION_MODEL_VERSION_CLEAN}-${LLM_VERSION_CLEAN}-final_stage_620k" 
-PREV_STAGE_CHECKPOINT="./checkpoints/mid_stage/llavanext-google_siglip-so400m-patch14-384-tokyotech-llm_Llama-3-Swallow-8B-Instruct-v0.1-mlp2x_gelu-mid_llava_pretrain_ja_swallow" 
+PREV_STAGE_CHECKPOINT="./checkpoints/mid_stage/${MID_RUN_NAME}" 
 echo "PREV_STAGE_CHECKPOINT: ${PREV_STAGE_CHECKPOINT}"
 echo "RUN_NAME: ${RUN_NAME}"
 
-torchrun --standalone --nproc_per_node=8 --nnodes=1 \
+ACCELERATE_CPU_AFFINITY=1 torchrun --standalone --nproc_per_node=2 --nnodes=1 \
     llava/train/train_mem.py \
     --deepspeed scripts/zero3.json \
     --model_name_or_path $PREV_STAGE_CHECKPOINT \
     --version $PROMPT_VERSION \
     --data_path ./scripts/stmk/train/final_stage.yaml \
     --image_folder ./datasets/images \
-    --mm_tunable_parts="mm_vision_tower,mm_mlp_adapter,mm_language_model" \
-    --mm_vision_tower_lr=2e-6 \
+    --mm_tunable_parts "mm_vision_tower,mm_mlp_adapter,mm_language_model" \
+    --mm_vision_tower_lr 2e-6 \
     --vision_tower ${VISION_MODEL_VERSION} \
     --mm_projector_type mlp2x_gelu \
     --mm_vision_select_layer -2 \
@@ -40,7 +48,7 @@ torchrun --standalone --nproc_per_node=8 --nnodes=1 \
     --num_train_epochs 1 \
     --per_device_train_batch_size 1 \
     --per_device_eval_batch_size 1 \
-    --gradient_accumulation_steps 1 \
+    --gradient_accumulation_steps 6 \
     --evaluation_strategy "no" \
     --save_strategy "steps" \
     --save_steps 1000 \
