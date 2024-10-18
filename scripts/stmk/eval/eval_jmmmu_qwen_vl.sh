@@ -1,5 +1,4 @@
 export CUDA_VISIBLE_DEVICES=0,1
-export HF_TOKEN="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"
 
 TASK="jmmmu"
 CKPT_PATH="Qwen/Qwen2-VL-7B-Instruct"
