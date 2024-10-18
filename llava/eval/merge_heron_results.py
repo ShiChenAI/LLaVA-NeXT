@@ -34,8 +34,8 @@ def run(args):
         output_path = os.path.join(args.outputs_dir, '%03d.csv' % img_id)
         result_infos = {"question_id": [], 
                         "question": [], 
-                        "category": [], 
-                        "image_category": []}
+                        "category": [],} 
+                        #"image_category": []}
         result_infos = {"question": []}
         b_first = True
         for case_name, result_path in case_infos.items():

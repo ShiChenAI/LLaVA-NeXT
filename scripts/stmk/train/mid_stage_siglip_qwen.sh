@@ -29,9 +29,9 @@ torchrun --standalone --nproc_per_node=8 --nnodes=1 \
     --version ${PROMPT_VERSION} \
     --data_path ./scripts/stmk/train/mid_stage.yaml \
     --image_folder ./datasets/images \
-    --pretrain_mm_mlp_adapter="./checkpoints/projectors/${BASE_RUN_NAME}/mm_projector.bin" \
-    --mm_tunable_parts="mm_vision_tower,mm_mlp_adapter,mm_language_model" \
-    --mm_vision_tower_lr=2e-6 \
+    --pretrain_mm_mlp_adapter "./checkpoints/projectors/${BASE_RUN_NAME}/mm_projector.bin" \
+    --mm_tunable_parts "mm_vision_tower,mm_mlp_adapter,mm_language_model" \
+    --mm_vision_tower_lr 2e-6 \
     --vision_tower ${VISION_MODEL_VERSION} \
     --mm_projector_type mlp2x_gelu \
     --mm_vision_select_layer -2 \

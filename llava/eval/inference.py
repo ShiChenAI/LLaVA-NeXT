@@ -143,7 +143,7 @@ def run(args):
                     "image": line["image"],
                     "question": question,
                     "category": line["category"],
-                    "image_category": line["image_category"],
+                    #"image_category": line["image_category"],
                     "answer": response
                 }, ensure_ascii=False) + "\n")
                 ans_f.flush()
