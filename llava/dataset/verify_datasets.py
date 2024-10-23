@@ -13,8 +13,8 @@ import argparse
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--ann-path", type=str, help="Path to the annotation file.")
-    parser.add_argument("--img-dir", type=str, help="Directory to the images.")
+    parser.add_argument("--ann-path", type=str, default="/storage_nvme/s-chen/Cauldron-JA-jsonl/Cauldron-JA_2.jsonl", help="Path to the annotation file.")
+    parser.add_argument("--img-dir", type=str, default="/storage_nvme/s-chen/Cauldron-JA-jsonl/images", help="Directory to the images.")
 
     return parser.parse_args()
 
@@ -47,14 +47,40 @@ def run(args):
     with open(args.ann_path) as f:
         n_files = 0
         for line in jsonlines.Reader(f):
-            img_path = os.path.join(args.img_dir, line["image"])
-            if not os.path.exists(img_path):
-                print(f"Not found: {img_path}")
-            else:
-                if is_valid_image(img_path):
-                    n_files += 1
+            id = line["id"]
+            # Verify the availability of all images in the dataset.
+            images_field = line["image"]
+            image_names = images_field if isinstance(images_field, list) else [images_field]
+            b_img = False
+            for image_name in image_names:
+                image_path = os.path.join(args.img_dir, image_name)
+                if not os.path.exists(image_path):
+                    b_img = False
+                    print(f"ID: {id}, image not found: {image_path}")
                 else:
-                    print(f"Not valid: {img_path}")
+                    if is_valid_image(image_path):
+                        b_img = True
+                    else:
+                        b_img = False
+                        print(f"ID: {id}, image Not valid: {image_path}")
+            # Verify the conversations
+            b_text = False
+            conversations = line["conversations"]
+            for conversation in conversations:
+                target_key = "jp" if "jp" in conversation.keys() else "value"
+                if conversation["from"] == "human":
+                    b_text = (conversation[target_key] 
+                              and len(conversation[target_key]) > 0 
+                              and conversation[target_key].count("<image>") == len(image_names))
+                elif conversation["from"] == "gpt":
+                    b_text = conversation[target_key] and len(conversation[target_key]) > 0
+            
+            if not b_text:
+                print(f"ID: {id}, Conversations not vaild: {conversations}")
+
+            if b_img and b_text:
+                n_files += 1
+
         print(f"Number of verified files: {n_files}")
 
 if __name__ == "__main__":

@@ -1,11 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-@File        :   process_cauldronja.py
-@Author      :   Shi Chen
-@Time        :   2024/10/21
-@Description :   Convert Cauldron-JA in *.parquet format to *.jsonl format.
-"""
-
 import os
 import argparse
 import glob
@@ -14,21 +6,24 @@ import numpy as np
 import pyarrow.parquet as pq
 import jsonlines
 from PIL import Image
+from PIL.Image import DecompressionBombWarning
 import io
 from tqdm import tqdm
 import base64
+import warnings
 
 def get_args():
     parser = argparse.ArgumentParser(description='Convert dataset format')
     parser.add_argument('--data-dir', default="./datasets/temp/Cauldron-JA", type=str, help='Directory of the original dataset')
     parser.add_argument('--extra-image-dir', default="/storage_nvme/datasets/geniac2.0-multi-modal-datasets/datasets/pair_datasets/Cauldron-JA/extra_images/", type=str, help='Directory of extra images')
     parser.add_argument('--output-image-dir', default="./datasets/temp/test/images", type=str, help='Output directory for images')
-    parser.add_argument('--output-jsonl-file', default="./datasets/temp/test/a.jsonl", type=str,help='Output JSONL file')
+    parser.add_argument('--output-jsonl-file', default="./datasets/temp/test/a.jsonl", type=str, help='Output JSONL file')
     parser.add_argument('--image-error-file', default="./datasets/temp/test/i.jsonl", type=str, help='File to log image extraction errors')
     parser.add_argument('--text-error-file', default="./datasets/temp/test/t.jsonl", type=str, help='File to log text extraction errors')
     return parser.parse_args()
 
 def make_serializable(obj):
+    # Replace with your existing make_serializable function
     if isinstance(obj, dict):
         new_obj = {}
         for k, v in obj.items():
@@ -68,6 +63,7 @@ def make_serializable(obj):
         return obj
 
 def extract_target_file(path):
+    # Replace with your existing extract_target_file function
     # Normalize the path to handle different OS path separators
     path = os.path.normpath(path)
     # Split the path into components
@@ -83,7 +79,7 @@ def extract_target_file(path):
     except ValueError:
         # 'extracted' not found in the path
         return None
-    
+
 def run(args):
     data_dir = args.data_dir
     extra_image_dir = args.extra_image_dir
@@ -127,61 +123,83 @@ def run(args):
                 image_saved = False
                 image_id_counter += 1
                 image_id_str = f'{image_id_counter:08d}'
-                # Save the image and get the result
+                # Save the images and get the result
                 try:
                     images_field = row['images']
-                    # Check if images_field is a non-empty list and contains 'bytes'
-                    if images_field and isinstance(images_field, np.ndarray) and 'bytes' in images_field[0] and 'path' in images_field[0]:
-                        if images_field.shape[0] > 1:
-                            print(f"id: {image_id_str}, shape: {images_field.shape}")
-                        
-                        image_info = images_field[0]
-                        image = None
-                        # Try to get image bytes from 'bytes' key
-                        if 'bytes' in image_info and image_info['bytes']:
-                            image_bytes_data = image_info['bytes']
-                            # Handle different types of image_bytes_data
-                            if isinstance(image_bytes_data, list):
-                                image_bytes = bytes(image_bytes_data)
-                            elif isinstance(image_bytes_data, bytes):
-                                image_bytes = image_bytes_data
-                            elif isinstance(image_bytes_data, np.ndarray):
-                                image_bytes = image_bytes_data.tobytes()
-                            else:
-                                raise ValueError(f"Unsupported image bytes data type for ID {image_id_str}.")
-                            # Convert bytes to an image
-                            image = Image.open(io.BytesIO(image_bytes))
-                        elif 'path' in image_info and image_info['path']:
-                            # Read image from the provided path
-                            image_path = os.path.join(extra_image_dir, extract_target_file(image_info['path']))
-                            # Try to open the image from the given path
-                            if os.path.exists(image_path):
-                                image = Image.open(image_path)
-                            else:
-                                raise FileNotFoundError(f"Image file not found at path {image_path} for ID {image_id_str}")
-                        else:
-                            raise ValueError(f"No valid image data for ID {image_id_str}.")
+                    image_paths = []
+                    # Check if images_field is an np.ndarray with shape (N,)
+                    if images_field is not None and isinstance(images_field, np.ndarray) and images_field.shape[0] > 0:
+                        num_images = images_field.shape[0]
+                        decompression_warning_occurred = False
+                        # Iterate over images_field using slicing
+                        for idx in range(num_images):
+                            with warnings.catch_warnings(record=True) as w:
+                                warnings.simplefilter('always')
+                                image_info = images_field[idx]
+                                image = None
+                                # Try to get image bytes from 'bytes' key
+                                if 'bytes' in image_info and image_info['bytes']:
+                                    image_bytes_data = image_info['bytes']
+                                    # Handle different types of image_bytes_data
+                                    if isinstance(image_bytes_data, list):
+                                        image_bytes = bytes(image_bytes_data)
+                                    elif isinstance(image_bytes_data, bytes):
+                                        image_bytes = image_bytes_data
+                                    elif isinstance(image_bytes_data, np.ndarray):
+                                        image_bytes = image_bytes_data.tobytes()
+                                    else:
+                                        raise ValueError(f"Unsupported image bytes data type for ID {image_id_str}.")
+                                    # Convert bytes to an image
+                                    image = Image.open(io.BytesIO(image_bytes))
+                                elif 'path' in image_info and image_info['path']:
+                                    # Read image from the provided path
+                                    extracted_path = extract_target_file(image_info['path'])
+                                    if extracted_path is not None:
+                                        image_path = os.path.join(extra_image_dir, extracted_path)
+                                    else:
+                                        image_path = image_info['path']
+                                    # Try to open the image from the given path
+                                    if os.path.exists(image_path):
+                                        image = Image.open(image_path)
+                                    else:
+                                        raise FileNotFoundError(f"Image file not found at path {image_path} for ID {image_id_str}")
+                                else:
+                                    raise ValueError(f"No valid image data for ID {image_id_str} at index {idx}.")
+                                
+                                for warning in w:
+                                    if issubclass(warning.category, DecompressionBombWarning):
+                                        decompression_warning_occurred = True
+                                        break
 
-                        # Convert image to RGB if not already
-                        if image.mode != 'RGB':
-                            image = image.convert('RGB')
-                        # Check and create the image subdirectory if it does not exist
-                        image_subdir = os.path.join(output_image_dir, subfolder_name)
-                        if not os.path.exists(image_subdir):
-                            os.makedirs(image_subdir)
-                        # Save the image as JPEG
-                        image_filename = os.path.join(image_subdir, f'{image_id_str}.jpg')
-                        image.save(image_filename, 'JPEG')
+                                # Convert image to RGB if not already
+                                if image.mode != 'RGB':
+                                    image = image.convert('RGB')
+                                # Check and create the image subdirectory if it does not exist
+                                image_subdir = os.path.join(output_image_dir, subfolder_name)
+                                if not os.path.exists(image_subdir):
+                                    os.makedirs(image_subdir)
+                                # Save the image as JPEG
+                                image_filename = os.path.join(image_subdir, f'{image_id_str}_{idx+1}.jpg')
+                                image.save(image_filename, 'JPEG')
+                                # Append the relative path to image_paths
+                                relative_image_path = f"{subfolder_name}/{image_id_str}_{idx+1}.jpg"
+                                image_paths.append(relative_image_path)
+                        if decompression_warning_occurred:
+                            break
                         image_saved = True
                     else:
                         raise ValueError(f"No valid image data for ID {image_id_str}.")
                 except Exception as e:
-                    print(f"Error processing image ID {image_id_str}: {e}")
+                    print(f"Error processing images for ID {image_id_str}: {e}")
                     # Log the full sample to images_error.jsonl
                     error_sample = {'id': image_id_str, 'images': row['images'], 'texts': row['texts']}
                     serializable_error_sample = make_serializable(error_sample)
                     image_error_writer.write(serializable_error_sample)
                     image_saved = False
+                    image_paths = []
+                
+                if decompression_warning_occurred:
+                    continue
 
                 # Create JSON record and write to JSONL file
                 try:
@@ -189,11 +207,15 @@ def run(args):
                     # Build the "conversations" field
                     conversations = []
                     for text_entry in texts_field:
+                        # Create <image> tags corresponding to the number of images
+                        image_tags = ''
+                        if image_saved:
+                            image_tags = '<image>' * len(image_paths)
                         # Process user message
                         human_entry = {
                             'from': 'human',
-                            'value': text_entry.get('user', ''),
-                            'jp': text_entry.get('jp_user', '')
+                            'value': f"{image_tags}{text_entry.get('user', '')}",
+                            'jp': f"{image_tags}{text_entry.get('jp_user', '')}"
                         }
                         # Process assistant reply
                         assistant_entry = {
@@ -202,13 +224,37 @@ def run(args):
                             'jp': text_entry.get('jp_assistant', '')
                         }
                         conversations.extend([human_entry, assistant_entry])
-                    # Create the JSON record
-                    json_record = {
-                        'id': image_id_str,
-                        'image': f"{subfolder_name}/{image_id_str}.jpg" if image_saved else None,
-                        'conversations': conversations
-                    }
-                    writer.write(json_record)
+
+                    # Determine the 'image' field based on the number of images
+                    if image_saved:
+                        if len(image_paths) == 1:
+                            image_output = image_paths[0]
+                        else:
+                            image_output = image_paths
+                    else:
+                        image_output = None
+
+                    # Re-check conversation
+                    checked_conversations = []
+                    i = 0
+                    while i < len(conversations):
+                        conv = conversations[i]
+                        if conv.get('from') == 'gpt' and len(conv.get('jp')) == 0:
+                            # Remove the previous 'human' conversation if it exists
+                            if checked_conversations and checked_conversations[-1].get('from') == 'human':
+                                checked_conversations.pop()
+                            # Skip adding the current 'gpt' conversation
+                        else:
+                            checked_conversations.append(conv)
+                        i += 1
+                    if len(checked_conversations) > 0:
+                        # Create the JSON record
+                        json_record = {
+                            'id': image_id_str,
+                            'image': image_output,
+                            'conversations': checked_conversations
+                        }
+                        writer.write(json_record)
                 except Exception as e:
                     print(f"Error processing text for ID {image_id_str}: {e}")
                     # Log the full sample to texts_error.jsonl
