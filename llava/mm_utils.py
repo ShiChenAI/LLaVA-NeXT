@@ -337,6 +337,20 @@ def process_images(images, image_processor, model_cfg):
         new_images = torch.stack(new_images, dim=0)
     return new_images
 
+def process_image(image, image_processor, model_cfg):
+    image_aspect_ratio = getattr(model_cfg, "image_aspect_ratio", None)
+    if image_aspect_ratio == "highres":
+        return process_highres_image(image, image_processor, model_cfg.image_grid_pinpoints)
+    elif image_aspect_ratio == "anyres" or "anyres_max" in image_aspect_ratio:
+        return process_anyres_image(image, image_processor, model_cfg.image_grid_pinpoints)
+    elif image_aspect_ratio == "crop_split":
+        return process_highres_image_crop_split(image, model_cfg, image_processor)
+    elif image_aspect_ratio == "pad":
+        image = expand2square(image, tuple(int(x * 255) for x in image_processor.image_mean))
+        return image_processor.preprocess(image, return_tensors="pt")["pixel_values"][0]
+    else:
+        return image_processor.preprocess(image, return_tensors="pt")["pixel_values"][0]
+
 
 def tokenizer_image_token(prompt, tokenizer, image_token_index=IMAGE_TOKEN_INDEX, return_tensors=None):
     prompt_chunks = [tokenizer(chunk).input_ids for chunk in prompt.split("<image>")]

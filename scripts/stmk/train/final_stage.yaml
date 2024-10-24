@@ -1,3 +1,7 @@
 datasets:
-  - json_path: ./datasets/LLaVA-v1.5-Instruct-620K-JA/llava_v1_5_instruct_620k_ja_v2.jsonl
-    sampling_strategy: all
+  - json_path: /storage_nvme/datasets/geniac2.0-multi-modal-datasets/datasets/pair_datasets/Japanese-Visual-Genome-VQA-dataset-jsonl/jvg.jsonl
+    sampling_strategy: random:10000
+  #- json_path: /storage_nvme/datasets/geniac2.0-multi-modal-datasets/datasets/pair_datasets/Cauldron-JA-jsonl/Cauldron-JA.jsonl
+  #  sampling_strategy: random:10000
+  #- json_path: ./datasets/LLaVA-v1.5-Instruct-620K-JA/llava_v1_5_instruct_620k_ja_v2.jsonl
+  #  sampling_strategy: all

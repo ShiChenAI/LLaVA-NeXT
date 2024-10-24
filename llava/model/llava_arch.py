@@ -253,7 +253,7 @@ class LlavaMetaForCausalLM(ABC):
         # rank_print(modalities)
         if vision_tower is None or images is None or input_ids.shape[1] == 1:
             return input_ids, position_ids, attention_mask, past_key_values, None, labels
-
+        
         if isinstance(modalities, str):
             modalities = [modalities]
 
@@ -277,6 +277,10 @@ class LlavaMetaForCausalLM(ABC):
             concat_images = torch.cat([image for image in images_list], dim=0)
             split_sizes = [image.shape[0] for image in images_list]
             encoded_image_features = self.encode_images(concat_images)
+            #print(f"images: {len(images)}")
+            #print(f"images_list: {len(images_list)}")
+            #print(f"concat_images: {concat_images.shape}")
+            #print(f"encoded_image_features: {encoded_image_features.shape}")
             # image_features,all_faster_video_features = self.encode_multimodals(concat_images, video_idx_in_batch, split_sizes)
 
             # This is a list, each element is [num_images, patch * patch, dim]
@@ -390,6 +394,7 @@ class LlavaMetaForCausalLM(ABC):
                                 image_feature = nn.functional.interpolate(image_feature, [int(h // times), int(w // times)], mode="bilinear")[0]
                             image_feature = torch.cat((image_feature, self.model.image_newline[:, None, None].expand(*image_feature.shape[:-1], 1).to(image_feature.device)), dim=-1)
                             image_feature = image_feature.flatten(1, 2).transpose(0, 1)
+                            #print(image_feature.shape)
                         elif "unpad" in mm_patch_merge_type:
                             image_feature = image_feature.permute(4, 0, 2, 1, 3).contiguous()
                             image_feature = image_feature.flatten(1, 2).flatten(2, 3)
@@ -420,7 +425,6 @@ class LlavaMetaForCausalLM(ABC):
         if getattr(self.config, "tune_mm_mlp_adapter", False) and getattr(self.config, "mm_use_im_start_end", False):
             raise NotImplementedError
         # rank_print(f"Total images : {len(image_features)}")
-
         # Let's just add dummy tensors if they do not exist,
         # it is a headache to deal with None all the time.
         # But it is not ideal, and if you have a better idea,
@@ -441,6 +445,9 @@ class LlavaMetaForCausalLM(ABC):
         _input_ids = input_ids
         input_ids = [cur_input_ids[cur_attention_mask] for cur_input_ids, cur_attention_mask in zip(input_ids, attention_mask)]
         labels = [cur_labels[cur_attention_mask] for cur_labels, cur_attention_mask in zip(labels, attention_mask)]
+        #print(f"input_ids_len: {len(input_ids)}")
+        #print(f"image_featuers_len: {len(image_features)}")
+        #print(f"input_ids: {input_ids}")
 
         new_input_embeds = []
         new_labels = []
@@ -448,6 +455,7 @@ class LlavaMetaForCausalLM(ABC):
         # rank_print("Inserting Images embedding")
         for batch_idx, cur_input_ids in enumerate(input_ids):
             num_images = (cur_input_ids == IMAGE_TOKEN_INDEX).sum()
+            #print(f"num_images:{num_images}")
             # rank0_print(num_images)
             if num_images == 0:
                 cur_image_features = image_features[cur_image_idx]

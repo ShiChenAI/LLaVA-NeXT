@@ -614,7 +614,7 @@ def preprocess_qwen(sources, tokenizer: transformers.PreTrainedTokenizer, has_im
         # Build system message for each sentence
         input_id += tokenizer.apply_chat_template([{"role" : "system", "content" : system_message}])
         target += [IGNORE_INDEX] * len(input_id)
-
+        
         for conv in source:
             # Make sure llava data can load
             try:

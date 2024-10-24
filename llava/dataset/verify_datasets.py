@@ -66,12 +66,17 @@ def run(args):
             # Verify the conversations
             b_text = False
             conversations = line["conversations"]
-            for conversation in conversations:
+            for idx, conversation in enumerate(conversations):
                 target_key = "jp" if "jp" in conversation.keys() else "value"
                 if conversation["from"] == "human":
-                    b_text = (conversation[target_key] 
-                              and len(conversation[target_key]) > 0 
-                              and conversation[target_key].count("<image>") == len(image_names))
+                    if idx == 0:
+                        b_text = (conversation[target_key] 
+                                and len(conversation[target_key]) > 0 
+                                and conversation[target_key].count("<image>") == len(image_names))
+                    else:
+                        b_text = (conversation[target_key] 
+                                and len(conversation[target_key]) > 0 
+                                and conversation[target_key].count("<image>") == 0)
                 elif conversation["from"] == "gpt":
                     b_text = conversation[target_key] and len(conversation[target_key]) > 0
             

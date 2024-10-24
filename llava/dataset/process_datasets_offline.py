@@ -6,6 +6,8 @@
 @Description :   Process all images in datasets offline.
 """
 
+import ast
+import re
 import argparse
 import json
 import jsonlines
@@ -17,16 +19,79 @@ import torch
 import transformers
 from transformers import AutoConfig
 from llava.model import *
-from llava.mm_utils import process_highres_image, process_anyres_image, resize_and_center_crop, extract_patches
+from llava.mm_utils import process_highres_image, process_anyres_image, resize_and_center_crop, extract_patches, process_image
+from llava.model.builder import load_pretrained_model
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--cfg-path", type=str, help="Path to the configuration file (*.json).")
-    parser.add_argument("--ann-path", type=str, help="Path to the annotation file.")
-    parser.add_argument("--img-dir", type=str, help="Directory to the images.")
-    parser.add_argument("--save-dir", type=str, help="Directory to the processed images.")
+    parser.add_argument("--model-name", type=str, default="llava_qwen", help="Name of the model.")
+    parser.add_argument("--cfg-path", type=str, default="./checkpoints/qwen_05B/qwen_config.json", help="Path to the configuration file (*.json).")
+    parser.add_argument("--ann-path", type=str, default="/storage_nvme/datasets/geniac2.0-multi-modal-datasets/datasets/pair_datasets/stage-2/LLaVA-v1.5-Instruct-620K-JA/llava_v1_5_instruct_620k_ja_v2.jsonl", help="Path to the annotation file.")
+    parser.add_argument("--image-dir", type=str, default="/storage_nvme/datasets/geniac2.0-multi-modal-datasets/datasets/pair_datasets/stage-2/LLaVA-v1.5-Instruct-620K-JA/", help="Directory to the images.")
+    parser.add_argument("--save-dir", type=str, default="./datasets/temp/620K/images", help="Directory to the processed images.")
 
     return parser.parse_args()
+
+def run(args):
+    parser = transformers.HfArgumentParser((ModelArguments, DataArguments, TrainingArguments))
+    model_args, data_args, training_args = parser.parse_json_file(args.cfg_path)
+    #tokenizer, model, image_processor, max_length = load_pretrained_model(model_args.model_name_or_path, None, args.model_name, attn_implementation="sdpa")  # Add any other thing you want to pass in llava_model_args
+    model = get_model(model_args, training_args, {})
+    model.get_model().initialize_vision_modules(model_args=model_args, fsdp=training_args.fsdp)
+    vision_tower = model.get_vision_tower()
+    data_args.image_processor = vision_tower.image_processor
+    data_args.is_multimodal = True
+
+    model.config.image_aspect_ratio = data_args.image_aspect_ratio
+    if "x" in data_args.image_grid_pinpoints:
+        try:
+            patch_size = data_args.image_processor.size[0]
+        except Exception as e:
+            patch_size = data_args.image_processor.size["shortest_edge"]
+
+        assert patch_size in [224, 336, 384, 448, 512], "patch_size should be in [224, 336, 384, 448, 512]"
+        # Use regex to extract the range from the input string
+        matches = re.findall(r"\((\d+)x(\d+)\)", data_args.image_grid_pinpoints)
+        range_start = tuple(map(int, matches[0]))
+        range_end = tuple(map(int, matches[-1]))
+        # Generate a matrix of tuples from (range_start[0], range_start[1]) to (range_end[0], range_end[1])
+        grid_pinpoints = [(i, j) for i in range(range_start[0], range_end[0] + 1) for j in range(range_start[1], range_end[1] + 1)]
+        # Multiply all elements by patch_size
+        data_args.image_grid_pinpoints = [[dim * patch_size for dim in pair] for pair in grid_pinpoints]
+    else:
+        data_args.image_grid_pinpoints = ast.literal_eval(data_args.image_grid_pinpoints)
+
+    model.config.image_grid_pinpoints = data_args.image_grid_pinpoints
+    model.config.image_crop_resolution = data_args.image_crop_resolution
+    model.config.image_split_resolution = data_args.image_split_resolution
+    model.config.mm_newline_position = model_args.mm_newline_position
+    model.config.add_faster_video = model_args.add_faster_video
+    model.config.faster_token_stride = model_args.faster_token_stride
+    model.config.add_time_instruction = data_args.add_time_instruction
+    model.config.force_sample = data_args.force_sample
+    model.config.mm_spatial_pool_stride = model_args.mm_spatial_pool_stride
+    
+    if not os.path.exists(args.save_dir):
+        os.makedirs(args.save_dir)
+    with open(args.ann_path) as f:
+        for line in jsonlines.Reader(f):
+            image_field = line["image"]
+            image_names = [image_field] if isinstance(image_field, str) else image_field
+            for image_name in image_names:
+                image_path = os.path.join(args.image_dir, image_name)
+                save_path = Path(args.save_dir) / Path(image_name).with_suffix(".pt")
+                save_path.parent.mkdir(parents=True, exist_ok=True)
+                try:
+                    image = Image.open(image_path).convert("RGB")
+                except Exception as exn:
+                    print(f"Failed to open image {image_path}. Exception:", exn)
+                    raise exn
+                image_tensor = process_image(image, data_args.image_processor, model.config)
+                try:
+                    torch.save(image_tensor, str(save_path))
+                except Exception as e:
+                    a = 0
+                print(f"Saved to {str(save_path)}")
 
 @dataclass
 class ModelArguments:
@@ -134,6 +199,7 @@ class TrainingArguments(transformers.TrainingArguments):
     gradient_checkpointing: bool = field(default=True)
     verbose_logging: bool = field(default=False)
     attn_implementation: str = field(default="flash_attention_2", metadata={"help": "Use transformers attention implementation."})
+
 
 def get_model(
     model_args, 
@@ -290,7 +356,7 @@ def get_model(
             **customized_kwargs,
         )
     return model
-
+"""
 def process_highres_image_crop_split(
     image, 
     image_crop_resolution,
@@ -357,13 +423,34 @@ def run(args):
     vision_tower = model.get_vision_tower()
 
     image_processor = vision_tower.image_processor
-    print(image_processor)
+    if "x" in image_grid_pinpoints:
+        try:
+            patch_size = image_processor.size[0]
+        except Exception as e:
+            patch_size = image_processor.size["shortest_edge"]
+
+        assert patch_size in [224, 336, 384, 448, 512], "patch_size should be in [224, 336, 384, 448, 512]"
+        # Use regex to extract the range from the input string
+        matches = re.findall(r"\((\d+)x(\d+)\)", data_args.image_grid_pinpoints)
+        range_start = tuple(map(int, matches[0]))
+        range_end = tuple(map(int, matches[-1]))
+        # Generate a matrix of tuples from (range_start[0], range_start[1]) to (range_end[0], range_end[1])
+        grid_pinpoints = [(i, j) for i in range(range_start[0], range_end[0] + 1) for j in range(range_start[1], range_end[1] + 1)]
+        # Multiply all elements by patch_size
+        data_args.image_grid_pinpoints = [[dim * patch_size for dim in pair] for pair in grid_pinpoints]
+    else:
+        image_grid_pinpoints = ast.literal_eval(image_grid_pinpoints)
 
     with open(args.ann_path) as f:
         for line in jsonlines.Reader(f):
-            img_path = os.path.join(args.img_dir, line["image"])
-            save_path = str(Path(args.save_dir) / Path(img_path).with_suffix(".pt").name)
-
+            image_field = line["image"]
+            image_names = [image_field] if isinstance(image_field, str) else image_field
+            for image_name in image_names:
+                image_path = os.path.join(args.image_dir, image_name)
+                save_path = str(Path(args.save_dir) / Path(img_name).with_suffix(".pt").name)
+                processed_image = 
+            
+"""
 
 
 if __name__ == "__main__":
